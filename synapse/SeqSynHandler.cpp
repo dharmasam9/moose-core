@@ -105,19 +105,6 @@ const Cinfo* SeqSynHandler::initCinfo()
 			&SeqSynHandler::setWeightScale,
 			&SeqSynHandler::getWeightScale
 	);
-
-	static ValueFinfo< SeqSynHandler, double > sequencePower(
-			"sequencePower",
-			"Exponent for the outcome of the sequential calculations. "
-			"This is needed because linear summation of terms in the kernel"
-			"means that a brief stong sequence match is no better than lots"
-			"of successive low matches. In other words, 12345 is no better"
-			"than 11111. Using an exponent lets us select the former."
-			"Defaults to 1.0.",
-			&SeqSynHandler::setSequencePower,
-			&SeqSynHandler::getSequencePower
-	);
-
 	static ReadOnlyValueFinfo< SeqSynHandler, vector< double > > 
 			weightScaleVec(
 			"weightScaleVec",
@@ -407,7 +394,7 @@ void SeqSynHandler::vProcess( const Eref& e, ProcPtr p )
 				seqActivation_ = 0.0;
 				for ( vector< double >::iterator y = correlVec.begin(); 
 								y != correlVec.end(); ++y )
-					seqActivation_ += pow( *y, sequencePower_ );
+					seqActivation_ += *y;
 	
 				// We'll use the seqActivation_ to send a special msg.
 				seqActivation_ *= responseScale_;
