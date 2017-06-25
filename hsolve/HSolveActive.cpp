@@ -101,6 +101,7 @@ void HSolveActive::step( ProcPtr info )
     }
 
 #ifdef USE_CUDA
+    step_num++;
    	advanceChannels( info->dt);
    	calculateChannelCurrents();
 
@@ -136,6 +137,7 @@ void HSolveActive::step( ProcPtr info )
 	sendSpikes( info );
 	//transfer_memory2cpu_cuda();
 
+
 #else
 
     advanceChannels( info->dt );
@@ -158,7 +160,7 @@ void HSolveActive::calculateChannelCurrents()
 #ifdef USE_CUDA
 
 	calculate_channel_currents_cuda_wrapper();
-	//cudaSafeCall(cudaMemcpy(&current_[0], d_current_, current_.size()*sizeof(CurrentStruct), cudaMemcpyDeviceToHost));
+	cudaSafeCall(cudaMemcpy(&current_[0], d_current_, current_.size()*sizeof(CurrentStruct), cudaMemcpyDeviceToHost));
 
 #else
     vector< ChannelStruct >::iterator ichan;
