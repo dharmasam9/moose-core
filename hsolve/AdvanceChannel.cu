@@ -98,6 +98,66 @@ void advance_channels_opt_cuda(
 	}
 }
 
+/*
+ * Advance Channels performing both lookup and state update
+ */
+__global__
+void advance_channels_for_externalCalcium(
+		double* d_externalCalcium,
+		int* d_exCalgate_indices,
+		int* state2chanId,
+		double* gate_values,
+		int* state2Column,
+		int* chan_instants,
+		double* table,
+		double min, double max, double dx,
+		unsigned int nColumns, double dt, unsigned int size){
+
+	int tid = threadIdx.x + blockIdx.x * blockDim.x;
+
+	if(tid < size){
+		int index = d_exCalgate_indices[tid]; // Index in the state_ array
+		int chan_id = state2chanId[index];
+		// Update state only if there is a contribution
+		if(d_externalCalcium[chan_id] != 0){
+			double a,b,C1,C2;
+			double x = d_externalCalcium[chan_id];
+
+			if ( x < min )
+				x = min;
+			else if ( x > max )
+				x = max;
+
+			double div = ( x - min ) / dx;
+			unsigned int integer = ( unsigned int )( div );
+
+			int row_start_index = integer*nColumns;
+			double frac = div-integer;
+
+			// Perform the update
+			int column = state2Column[index];
+
+			a = table[row_start_index + column];
+			b = table[row_start_index + column + nColumns];
+
+			C1 = a + (b-a)*frac;
+
+			a = table[row_start_index + column + 1];
+			b = table[row_start_index + column + 1 + nColumns];
+
+			C2 = a + (b-a)*frac;
+
+			if(!chan_instants[chan_id]){
+				a = 1.0 + dt/2.0 * C2; // reusing a
+				gate_values[index] = ( gate_values[index] * ( 2.0 - a ) + dt * C1 ) / a;
+			}
+			else{
+				gate_values[index] = C1/C2;
+			}
+
+		}
+	}
+}
 
 /*
  * Gbar*(x1^p1)*(x2^p2) ... (xn^pn) is computed for each channel
@@ -464,6 +524,22 @@ void HSolveActive::advance_channels_cuda_wrapper(double dt){
 				caTable_.get_num_of_columns(),
 				dt, num_cadep_gates );
 	}
+
+	/*
+	// TODO test this method
+	// Overriding Z power incase of externalCalcium dependent gates
+	BLOCKS = (h_exCalgate_indices.size() + THREADS_PER_BLOCK-1)/THREADS_PER_BLOCK;
+	advance_channels_for_externalCalcium<<<BLOCKS,THREADS_PER_BLOCK>>>(
+			d_externalCalcium,
+			d_exCalgate_indices,
+			d_state2chanId,
+			d_state_,
+			d_state2column,
+			d_chan_instant,
+			d_Ca_table,
+			caTable_.get_min(), caTable_.get_max(), caTable_.get_dx(),
+			caTable_.get_num_of_columns(), dt, h_exCalgate_indices.size());
+	*/
 
 	#ifdef PIN_POINT_ERROR
 		cudaCheckError(); // Checking for cuda related errors.

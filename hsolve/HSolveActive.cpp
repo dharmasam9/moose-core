@@ -520,6 +520,7 @@ void HSolveActive::advanceChannels( double dt )
 		cudaSafeCall(cudaMemcpy(d_V, &(V_.front()), nCompt_ * sizeof(double), cudaMemcpyHostToDevice));
 		cudaSafeCall(cudaMemcpy(d_state_, &(state_[0]), state_.size()*sizeof(double), cudaMemcpyHostToDevice));
 		cudaSafeCall(cudaMemcpy(d_ca, &(ca_.front()), ca_.size()*sizeof(double), cudaMemcpyHostToDevice));
+		cudaSafeCall(cudaMemcpy(d_externalCalcium, &(externalCalcium_.front()), externalCalcium_.size()*sizeof(double), cudaMemcpyHostToDevice));
 
 		is_initialized = true;
 	}
@@ -528,6 +529,7 @@ void HSolveActive::advanceChannels( double dt )
 	cudaSafeCall(cudaMemcpy(d_V, &(V_.front()), nCompt_ * sizeof(double), cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMemcpy(d_state_, &(state_[0]), state_.size()*sizeof(double), cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMemcpy(d_ca, &(ca_.front()), ca_.size()*sizeof(double), cudaMemcpyHostToDevice));
+	cudaSafeCall(cudaMemcpy(d_externalCalcium, &(externalCalcium_.front()), externalCalcium_.size()*sizeof(double), cudaMemcpyHostToDevice));
 
 	// Calling the kernels
 	get_lookup_rows_and_fractions_cuda_wrapper(dt); // Gets lookup values for Vm and Ca_.
@@ -688,6 +690,8 @@ void HSolveActive::allocate_hsolve_memory_cuda(){
 	cudaSafeCall(cudaMalloc((void **)&(d_ca), num_Ca_pools * sizeof(double)));
 	cudaSafeCall(cudaMalloc((void **)&(d_Ca_table), Ca_table_size * sizeof(double)));
 
+	cudaSafeCall(cudaMalloc((void **)&(d_externalCalcium), num_channels * sizeof(double)));
+
 	//cudaSafeCall(cudaMalloc((void**)&d_state_, num_cmprsd_gates*sizeof(double)));
 
 	// Channel related
@@ -743,6 +747,9 @@ void HSolveActive::allocate_hsolve_memory_cuda(){
 	cudaSafeCall(cudaMalloc((void**)&d_capool_values, h_catarget_channel_indices.size()*sizeof(double)));
 	cudaSafeCall(cudaMalloc((void**)&d_capool_onex, h_catarget_channel_indices.size()*sizeof(double)));
 
+	// External Calcium indices
+	cudaSafeCall(cudaMalloc((void**)&d_exCalgate_indices, h_exCalgate_indices.size()*sizeof(int)));
+
 	// Optimized approach.
 	cudaSafeCall(cudaMalloc((void**)&d_state_, num_cmprsd_gates*sizeof(double)));
 	cudaSafeCall(cudaMalloc((void**)&d_state_rowPtr, (num_channels+1)*sizeof(int)));
@@ -785,6 +792,7 @@ void HSolveActive::copy_hsolve_information_cuda(){
 	// Transferring Vm and Ca concentration values to GPU
 	cudaSafeCall(cudaMemcpy(d_V, &(V_.front()), num_compts*sizeof(double), cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMemcpy(d_ca, &(ca_.front()), num_Ca_pools*sizeof(double), cudaMemcpyHostToDevice));
+	cudaSafeCall(cudaMemcpy(d_externalCalcium, &(externalCalcium_.front()), num_channels*sizeof(double), cudaMemcpyHostToDevice));
 
 	// Gathering data for each channel
 	for(int i=0;i<num_channels;i++){
@@ -862,6 +870,9 @@ void HSolveActive::copy_hsolve_information_cuda(){
 					}else{
 						h_vgate_compIds.push_back((int)chan2compt_[j]);
 						h_vgate_indices.push_back(cmprsd_gate_index);
+
+						// k=2 gate might depend on externalCalcium
+						h_exCalgate_indices.push_back(cmprsd_gate_index);
 					}
 					h_state_rowPtr[j] += 1;
 					cmprsd_gate_index++; // cmprsd_gate_index is incremented only if power > 0 is found.
@@ -887,6 +898,8 @@ void HSolveActive::copy_hsolve_information_cuda(){
 
 	cudaSafeCall(cudaMalloc((void**)&d_cagate_indices, h_cagate_indices.size()* sizeof(int)));
 	cudaSafeCall(cudaMalloc((void**)&d_cagate_capoolIds, h_cagate_capoolIds.size()* sizeof(int)));
+
+	cudaSafeCall(cudaMalloc((void**)&d_exCalgate_indices, h_exCalgate_indices.size()* sizeof(int)));
 
 	// Transfering memory (Optimized approach)
 	cudaSafeCall(cudaMemcpy(d_state_rowPtr, h_state_rowPtr, (num_channels+1)*sizeof(int), cudaMemcpyHostToDevice));

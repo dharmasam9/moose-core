@@ -151,6 +151,8 @@ protected:
 	vector<int> h_catarget_channel_indices; // Stores the indices of channel which are ca targets in order
 	vector<int> h_catarget_capool_indices; // Store the index of calcium pool
 
+	vector<int> h_exCalgate_indices;
+
 	// LookUp Tables
 	double* d_V_table;
 	double* d_Ca_table;
@@ -166,6 +168,8 @@ protected:
 
 	int* d_cagate_indices; // Set of gates that are calcium dependent.
 	int* d_cagate_capoolIds; // Corresponding calcium pool id of calcium dependent gate
+
+	int* d_exCalgate_indices; // Indices in the d_state_ array with z-power != 0
 
 	// advanceCalcium related.
 	int* d_catarget_channel_indices;
@@ -223,6 +227,7 @@ protected:
 	// CUDA Active Permanent data
 	double* d_V;
 	double* d_ca;
+	double* d_externalCalcium;
 
 
 	// CUDA Active helper data
