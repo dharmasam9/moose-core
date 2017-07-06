@@ -245,7 +245,6 @@ void HSolve::addInject( Id id, double value )
     inject_[ index ].injectVarying += value;
 
 
-    cout << step_num << " add Inject " << value <<  endl;
 }
 
 

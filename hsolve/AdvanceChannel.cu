@@ -487,6 +487,7 @@ void HSolveActive::advance_channels_cuda_wrapper(double dt){
 
 	int num_vdep_gates = h_vgate_indices.size();
 	int num_cadep_gates = h_cagate_indices.size();
+	int num_exCaldep_gates = h_exCalgate_indices.size();
 
 	int BLOCKS;
 
@@ -525,21 +526,21 @@ void HSolveActive::advance_channels_cuda_wrapper(double dt){
 				dt, num_cadep_gates );
 	}
 
-	/*
-	// TODO test this method
-	// Overriding Z power incase of externalCalcium dependent gates
-	BLOCKS = (h_exCalgate_indices.size() + THREADS_PER_BLOCK-1)/THREADS_PER_BLOCK;
-	advance_channels_for_externalCalcium<<<BLOCKS,THREADS_PER_BLOCK>>>(
-			d_externalCalcium,
-			d_exCalgate_indices,
-			d_state2chanId,
-			d_state_,
-			d_state2column,
-			d_chan_instant,
-			d_Ca_table,
-			caTable_.get_min(), caTable_.get_max(), caTable_.get_dx(),
-			caTable_.get_num_of_columns(), dt, h_exCalgate_indices.size());
-	*/
+
+	if(num_exCaldep_gates > 0){
+		// Overriding Z power incase of externalCalcium dependent gates
+		BLOCKS = (h_exCalgate_indices.size() + THREADS_PER_BLOCK-1)/THREADS_PER_BLOCK;
+		advance_channels_for_externalCalcium<<<BLOCKS,THREADS_PER_BLOCK>>>(
+				d_externalCalcium,
+				d_exCalgate_indices,
+				d_state2chanId,
+				d_state_,
+				d_state2column,
+				d_chan_instant,
+				d_Ca_table,
+				caTable_.get_min(), caTable_.get_max(), caTable_.get_dx(),
+				caTable_.get_num_of_columns(), dt, h_exCalgate_indices.size());
+	}
 
 	#ifdef PIN_POINT_ERROR
 		cudaCheckError(); // Checking for cuda related errors.
