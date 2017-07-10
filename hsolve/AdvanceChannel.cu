@@ -576,19 +576,6 @@ void HSolveActive::update_matrix_cuda_wrapper(){
 	int num_channels = channel_.size();
 	int BLOCKS;
 
-	// As inject_ and externalCurrent_ data structures are updated by messages,
-	// they have to be updated on the device too. Hence the transfer
-	cudaSafeCall(cudaMemcpy(d_inject_, &inject_[0], nCompt_*sizeof(InjectStruct), cudaMemcpyHostToDevice));
-
-	cudaSafeCall(cudaMemcpy(d_externalCurrent_, &(externalCurrent_.front()), 2 * nCompt_ * sizeof(double), cudaMemcpyHostToDevice));
-
-	// As inject data is already on device, injectVarying can be set to zero.
-	for (int i = 0; i < inject_.size(); ++i) {
-		inject_[i].injectVarying = 0;
-	}
-
-	// Sending external current to GPU
-
 	BLOCKS = (nCompt_+THREADS_PER_BLOCK-1)/THREADS_PER_BLOCK;
 	if(UPDATE_MATRIX_APPROACH == UPDATE_MATRIX_WPT_APPROACH){
 		// WPT approach for update matrix
@@ -628,8 +615,6 @@ void HSolveActive::update_matrix_cuda_wrapper(){
 	}else{
 		// Future approaches, if any.
 	}
-
-	cudaSafeCall(cudaMemcpy(&HS_[0], d_HS_, HS_.size()*sizeof(double), cudaMemcpyDeviceToHost ));
 }
 
 void HSolveActive::update_perv_matrix_cuda_wrapper(){
@@ -797,9 +782,6 @@ void HSolveActive::advance_calcium_cuda_wrapper(){
 			advance_calcium_conc_cuda<<<BLOCKS,THREADS_PER_BLOCK>>>(d_caConc_, d_ca, d_caActivation_values, num_ca_pools);
 		}
 	}
-
-	// Sending calcium data to host
-	cudaSafeCall(cudaMemcpy(&(ca_[0]), d_ca, ca_.size()*sizeof(double), cudaMemcpyDeviceToHost));
 
 #ifdef PIN_POINT_ERROR
 	cudaCheckError(); // Checking for cuda related errors.

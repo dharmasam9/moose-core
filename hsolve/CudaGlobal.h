@@ -5,6 +5,8 @@
 
 #ifdef USE_CUDA
 
+#define PROFILE_CUDA
+
 #define BLOCK_WIDTH 64
 #define THREADS_PER_BLOCK 256
 

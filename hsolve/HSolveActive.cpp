@@ -107,30 +107,56 @@ void HSolveActive::step( ProcPtr info )
 
 	int solver_choice = 0; // 0-Moose , 1-Forward-flow, 2-Pervasive-flow
 
+	// Update Matrix
 	switch(solver_choice){
 		case 0:
 			updateMatrix();
-			HSolvePassive::forwardEliminate();
-			HSolvePassive::backwardSubstitute();
-			break;
 			break;
 		case 1:
 			// Using forward flow solution
 			updateForwardFlowMatrix();
-			forwardFlowSolver();
 			break;
 		case 2:
 			// Using pervasive flow solution
 			//updatePervasiveFlowMatrix();
-			//pervasiveFlowSolver();
 			updatePervasiveFlowMatrixOpt();
-			pervasiveFlowSolverOpt();
 			break;
 	}
 
+	// Solver
+#ifdef PROFILE_CUDA
+	GpuTimer solver_compTimer, solver_g2cTimer;
+	solver_compTimer.Start();
+#endif
+	switch(solver_choice){
+		case 0:
+			HSolvePassive::forwardEliminate();
+			HSolvePassive::backwardSubstitute();
+			break;
+		case 1:
+			forwardFlowSolver();
+			break;
+		case 2:
+			//pervasiveFlowSolver();
+			pervasiveFlowSolverOpt();
+			break;
+	}
+#ifdef PROFILE_CUDA
+	solver_compTimer.Stop();
+	solver_g2cTimer.Start();
+#endif
 	cudaSafeCall(cudaMemcpy(d_Vmid, &(VMid_[0]), nCompt_*sizeof(double), cudaMemcpyHostToDevice));
 	calculate_V_from_Vmid_wrapper(); // Avoing Vm memory transfer and using CUDA kernel
-
+#ifdef PROFILE_CUDA
+	solver_g2cTimer.Stop();
+	float solver_compTime, solver_g2cTime, solver_totalTime;
+	float solver_c2gTime = 0;
+	solver_compTime = solver_compTimer.Elapsed();
+	solver_g2cTime = solver_g2cTimer.Elapsed();
+	solver_totalTime = solver_compTime + solver_g2cTime;
+	if(step_num < 5)
+		cout <<  solver_totalTime << " , " << solver_c2gTime << " , " << solver_compTime << " , " << solver_g2cTime << endl;
+#endif
 	advanceCalcium();
 	advanceSynChans( info );
 	sendValues( info );
@@ -158,10 +184,31 @@ void HSolveActive::step( ProcPtr info )
 void HSolveActive::calculateChannelCurrents()
 {
 #ifdef USE_CUDA
+#ifdef PROFILE_CUDA
+	GpuTimer compTimer,g2cTimer;
+#endif
 
+	// No c2g memcpy
+#ifdef PROFILE_CUDA
+	compTimer.Start();
+#endif
 	calculate_channel_currents_cuda_wrapper();
+#ifdef PROFILE_CUDA
+	compTimer.Stop();
+	g2cTimer.Start();
+#endif
+	// Transferring memory to host
 	cudaSafeCall(cudaMemcpy(&current_[0], d_current_, current_.size()*sizeof(CurrentStruct), cudaMemcpyDeviceToHost));
-
+#ifdef PROFILE_CUDA
+	g2cTimer.Stop();
+	// Calculate elapsed times
+	float c2gTime = 0;
+	float compTime = compTimer.Elapsed();
+	float g2cTime = g2cTimer.Elapsed();
+	float totalTime = c2gTime+compTime+g2cTime;
+	if(step_num < 5)
+		cout << totalTime << " , " << c2gTime << " , " << compTime << " , " << g2cTime << endl;
+#endif
 #else
     vector< ChannelStruct >::iterator ichan;
     vector< CurrentStruct >::iterator icurrent = current_.begin();
@@ -182,13 +229,42 @@ void HSolveActive::calculateChannelCurrents()
 void HSolveActive::updateMatrix()
 {
 #ifdef USE_CUDA
+#ifdef PROFILE_CUDA
+	GpuTimer c2gTimer, compTimer, g2cTimer;
+	c2gTimer.Start();
+#endif
+	// As inject_ and externalCurrent_ data structures are updated by messages,
+	// they have to be updated on the device too. Hence the transfer
+	cudaSafeCall(cudaMemcpy(d_inject_, &inject_[0], nCompt_*sizeof(InjectStruct), cudaMemcpyHostToDevice));
+	cudaSafeCall(cudaMemcpy(d_externalCurrent_, &(externalCurrent_.front()), 2 * nCompt_ * sizeof(double), cudaMemcpyHostToDevice));
+#ifdef PROFILE_CUDA
+	c2gTimer.Stop();
+	compTimer.Start();
+#endif
+	// As inject data is already on device, injectVarying can be set to zero.
+	for (int i = 0; i < inject_.size(); ++i) {
+		inject_[i].injectVarying = 0;
+	}
 
 	// Updates HS matrix and sends it to CPU
 	if ( HJ_.size() != 0 )
 		memcpy( &HJ_[ 0 ], &HJCopy_[ 0 ], sizeof( double ) * HJ_.size() );
 	update_matrix_cuda_wrapper();
-
-
+#ifdef PROFILE_CUDA
+	compTimer.Stop();
+	g2cTimer.Start();
+#endif
+	cudaSafeCall(cudaMemcpy(&HS_[0], d_HS_, HS_.size()*sizeof(double), cudaMemcpyDeviceToHost ));
+#ifdef PROFILE_CUDA
+	g2cTimer.Stop();
+	// Calculate elapsed times
+	float c2gTime = c2gTimer.Elapsed();
+	float compTime = compTimer.Elapsed();
+	float g2cTime = g2cTimer.Elapsed();
+	float totalTime = c2gTime+compTime+g2cTime;
+	if(step_num < 5)
+		cout << totalTime << " , " << c2gTime << " , " << compTime << " , " << g2cTime << endl;
+#endif
 	// Copying initial matrix
 	//memcpy(qfull_mat.values, perv_mat_values_copy, qfull_mat.nnz*sizeof(double));
 	//update_perv_matrix_cuda_wrapper();
@@ -443,7 +519,31 @@ void HSolveActive::pervasiveFlowSolverOpt(){
 void HSolveActive::advanceCalcium()
 {
 #ifdef USE_CUDA
+#ifdef PROFILE_CUDA
+	GpuTimer compTimer,g2cTimer;
+#endif
+
+	// No c2g memcpy
+#ifdef PROFILE_CUDA
+	compTimer.Start();
+#endif
 	advance_calcium_cuda_wrapper();
+#ifdef PROFILE_CUDA
+	compTimer.Stop();
+	g2cTimer.Start();
+#endif
+	// Sending calcium data to host
+	cudaSafeCall(cudaMemcpy(&(ca_[0]), d_ca, ca_.size()*sizeof(double), cudaMemcpyDeviceToHost));
+#ifdef PROFILE_CUDA
+	g2cTimer.Stop();
+	// Calculate elapsed times
+	float c2gTime = 0;
+	float compTime = compTimer.Elapsed();
+	float g2cTime = g2cTimer.Elapsed();
+	float totalTime = c2gTime+compTime+g2cTime;
+	if(step_num < 5)
+		cout << totalTime << " , " << c2gTime << " , " << compTime << " , " << g2cTime << endl;
+#endif
 #else
 
     vector< double* >::iterator icatarget = caTarget_.begin();
@@ -515,6 +615,10 @@ void HSolveActive::advanceChannels( double dt )
 {
 
 #ifdef USE_CUDA
+#ifdef PROFILE_CUDA
+	GpuTimer c2gTimer,compTimer,g2cTimer;
+#endif
+
 	if(!is_initialized){
 		// Initializing device Vm and Ca pools
 		cudaSafeCall(cudaMemcpy(d_V, &(V_.front()), nCompt_ * sizeof(double), cudaMemcpyHostToDevice));
@@ -524,19 +628,39 @@ void HSolveActive::advanceChannels( double dt )
 
 		is_initialized = true;
 	}
-
+#ifdef PROFILE_CUDA
+	c2gTimer.Start();
+#endif
 	// Transferring memory to device
 	cudaSafeCall(cudaMemcpy(d_V, &(V_.front()), nCompt_ * sizeof(double), cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMemcpy(d_state_, &(state_[0]), state_.size()*sizeof(double), cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMemcpy(d_ca, &(ca_.front()), ca_.size()*sizeof(double), cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMemcpy(d_externalCalcium, &(externalCalcium_.front()), externalCalcium_.size()*sizeof(double), cudaMemcpyHostToDevice));
-
+#ifdef PROFILE_CUDA
+	c2gTimer.Stop();
+	compTimer.Start();
+#endif
 	// Calling the kernels
 	get_lookup_rows_and_fractions_cuda_wrapper(dt); // Gets lookup values for Vm and Ca_.
 	advance_channels_cuda_wrapper(dt); // Advancing fraction values.
-
+#ifdef PROFILE_CUDA
+	compTimer.Stop();
+	g2cTimer.Start();
+#endif
 	// Transferring memory to host
 	cudaSafeCall(cudaMemcpy(&state_[0], d_state_, state_.size()*sizeof(double), cudaMemcpyDeviceToHost));
+#ifdef PROFILE_CUDA
+	g2cTimer.Stop();
+	// Calculate elapsed times
+	float c2gTime = c2gTimer.Elapsed();
+	float compTime = compTimer.Elapsed();
+	float g2cTime = g2cTimer.Elapsed();
+	float totalTime = c2gTime+compTime+g2cTime;
+	if(step_num < 5){
+		cout << endl; cout << endl;
+		cout << totalTime << " , " << c2gTime << " , " << compTime << " , " << g2cTime << endl;
+	}
+#endif
 #else
 
     vector< double >::iterator iv;
