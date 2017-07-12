@@ -245,6 +245,14 @@ protected:
 	int* stim_map, *d_stim_map; // An array of size nCompt, which stores the id in stim_comp_indices array if it is a stem, else -1.
 	int num_stim_comp; // Number of compartment with an injectCurrent stimlation.
 
+#ifdef PROFILE_CUDA
+	vector<float> ACH_total, ACH_g2c, ACH_comp, ACH_c2g;
+	vector<float> CC_total, CC_g2c, CC_comp, CC_c2g;
+	vector<float> UM_total, UM_g2c, UM_comp, UM_c2g;
+	vector<float> HS_total, HS_g2c, HS_comp, HS_c2g;
+	vector<float> ACA_total, ACA_g2c, ACA_comp, ACA_c2g;
+#endif
+
 #endif
 
 

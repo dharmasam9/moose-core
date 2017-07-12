@@ -154,6 +154,13 @@ void HSolveActive::step( ProcPtr info )
 	solver_compTime = solver_compTimer.Elapsed();
 	solver_g2cTime = solver_g2cTimer.Elapsed();
 	solver_totalTime = solver_compTime + solver_g2cTime;
+
+	// Storing elapsed times.
+	HS_c2g.push_back(solver_c2gTime);
+	HS_comp.push_back(solver_compTime);
+	HS_g2c.push_back(solver_g2cTime);
+	HS_total.push_back(solver_totalTime);
+
 	if(step_num < 5)
 		cout <<  solver_totalTime << " , " << solver_c2gTime << " , " << solver_compTime << " , " << solver_g2cTime << endl;
 #endif
@@ -162,6 +169,14 @@ void HSolveActive::step( ProcPtr info )
 	sendValues( info );
 	sendSpikes( info );
 	//transfer_memory2cpu_cuda();
+
+#ifdef PROFILE_CUDA
+	// Get simulation time from code
+	if(step_num == (int)(dt_*0.1)){
+		// Print required info
+		//TODO
+	}
+#endif
 
 
 #else
@@ -206,6 +221,13 @@ void HSolveActive::calculateChannelCurrents()
 	float compTime = compTimer.Elapsed();
 	float g2cTime = g2cTimer.Elapsed();
 	float totalTime = c2gTime+compTime+g2cTime;
+
+	// Storing elapsed times.
+	CC_c2g.push_back(c2gTime);
+	CC_comp.push_back(compTime);
+	CC_g2c.push_back(g2cTime);
+	CC_total.push_back(totalTime);
+
 	if(step_num < 5)
 		cout << totalTime << " , " << c2gTime << " , " << compTime << " , " << g2cTime << endl;
 #endif
@@ -262,6 +284,13 @@ void HSolveActive::updateMatrix()
 	float compTime = compTimer.Elapsed();
 	float g2cTime = g2cTimer.Elapsed();
 	float totalTime = c2gTime+compTime+g2cTime;
+
+	// Storing elapsed times.
+	UM_c2g.push_back(c2gTime);
+	UM_comp.push_back(compTime);
+	UM_g2c.push_back(g2cTime);
+	UM_total.push_back(totalTime);
+
 	if(step_num < 5)
 		cout << totalTime << " , " << c2gTime << " , " << compTime << " , " << g2cTime << endl;
 #endif
@@ -541,6 +570,13 @@ void HSolveActive::advanceCalcium()
 	float compTime = compTimer.Elapsed();
 	float g2cTime = g2cTimer.Elapsed();
 	float totalTime = c2gTime+compTime+g2cTime;
+
+	// Storing elapsed times.
+	ACA_c2g.push_back(c2gTime);
+	ACA_comp.push_back(compTime);
+	ACA_g2c.push_back(g2cTime);
+	ACA_total.push_back(totalTime);
+
 	if(step_num < 5)
 		cout << totalTime << " , " << c2gTime << " , " << compTime << " , " << g2cTime << endl;
 #endif
@@ -656,6 +692,13 @@ void HSolveActive::advanceChannels( double dt )
 	float compTime = compTimer.Elapsed();
 	float g2cTime = g2cTimer.Elapsed();
 	float totalTime = c2gTime+compTime+g2cTime;
+
+	// Storing elapsed times.
+	ACH_c2g.push_back(c2gTime);
+	ACH_comp.push_back(compTime);
+	ACH_g2c.push_back(g2cTime);
+	ACH_total.push_back(totalTime);
+
 	if(step_num < 5){
 		cout << endl; cout << endl;
 		cout << totalTime << " , " << c2gTime << " , " << compTime << " , " << g2cTime << endl;
