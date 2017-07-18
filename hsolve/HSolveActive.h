@@ -253,6 +253,11 @@ protected:
 	vector<float> ACA_total, ACA_g2c, ACA_comp, ACA_c2g;
 #endif
 
+	// Variables for enabling on-demand memory Xs
+	bool externCal_c2g_req;
+	bool inject_c2g_req;
+	bool externalCur_c2g_req;
+
 #endif
 
 

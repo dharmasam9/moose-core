@@ -235,6 +235,10 @@ void HSolve::setInject( Id id, double value )
     	stim_basal_values[stim_map[index]] = value;
     }
 #endif
+
+#ifdef USE_CUDA
+    inject_c2g_req = true;
+#endif
 }
 
 void HSolve::addInject( Id id, double value )
@@ -244,6 +248,9 @@ void HSolve::addInject( Id id, double value )
     assert( index < nCompt_ );
     inject_[ index ].injectVarying += value;
 
+#ifdef USE_CUDA
+    inject_c2g_req = true;
+#endif
 
 }
 
@@ -278,6 +285,9 @@ void HSolve::addGkEk( Id id, double Gk, double Ek )
     assert( 2 * index + 1 < externalCurrent_.size() );
     externalCurrent_[ 2 * index ] += Gk;
     externalCurrent_[ 2 * index + 1 ] += Gk * Ek;
+#ifdef USE_CUDA
+    externalCur_c2g_req = true;
+#endif
 }
 
 void HSolve::addConc( Id id, double conc )
@@ -285,6 +295,9 @@ void HSolve::addConc( Id id, double conc )
     unsigned int index = localIndex( id );
     assert(  index < externalCalcium_.size() );
     externalCalcium_[ index ] = conc;
+#ifdef USE_CUDA
+    externCal_c2g_req = true;
+#endif
 }
 
 

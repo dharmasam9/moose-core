@@ -79,6 +79,11 @@ HSolveActive::HSolveActive()
 	cusparseSafeCall(cusparseSetMatIndexBase(cusparse_descr, CUSPARSE_INDEX_BASE_ZERO));
 
 	is_initialized = false;
+
+	// Initializing on demand memory X variables
+	externCal_c2g_req = true;
+	inject_c2g_req = true;
+	externalCur_c2g_req = true;
 #endif
 
 
@@ -257,8 +262,14 @@ void HSolveActive::updateMatrix()
 #endif
 	// As inject_ and externalCurrent_ data structures are updated by messages,
 	// they have to be updated on the device too. Hence the transfer
-	cudaSafeCall(cudaMemcpy(d_inject_, &inject_[0], nCompt_*sizeof(InjectStruct), cudaMemcpyHostToDevice));
-	cudaSafeCall(cudaMemcpy(d_externalCurrent_, &(externalCurrent_.front()), 2 * nCompt_ * sizeof(double), cudaMemcpyHostToDevice));
+	if(inject_c2g_req){
+		cudaSafeCall(cudaMemcpy(d_inject_, &inject_[0], nCompt_*sizeof(InjectStruct), cudaMemcpyHostToDevice));
+		inject_c2g_req = false;
+	}
+	if(externalCur_c2g_req){
+		cudaSafeCall(cudaMemcpy(d_externalCurrent_, &(externalCurrent_.front()), 2 * nCompt_ * sizeof(double), cudaMemcpyHostToDevice));
+		externalCur_c2g_req = false;
+	}
 #ifdef PROFILE_CUDA
 	c2gTimer.Stop();
 	compTimer.Start();
@@ -671,7 +682,10 @@ void HSolveActive::advanceChannels( double dt )
 	//cudaSafeCall(cudaMemcpy(d_V, &(V_.front()), nCompt_ * sizeof(double), cudaMemcpyHostToDevice));
 	//cudaSafeCall(cudaMemcpy(d_state_, &(state_[0]), state_.size()*sizeof(double), cudaMemcpyHostToDevice));
 	//cudaSafeCall(cudaMemcpy(d_ca, &(ca_.front()), ca_.size()*sizeof(double), cudaMemcpyHostToDevice));
-	cudaSafeCall(cudaMemcpy(d_externalCalcium, &(externalCalcium_.front()), externalCalcium_.size()*sizeof(double), cudaMemcpyHostToDevice));
+	if(externCal_c2g_req){
+		cudaSafeCall(cudaMemcpy(d_externalCalcium, &(externalCalcium_.front()), externalCalcium_.size()*sizeof(double), cudaMemcpyHostToDevice));
+		externCal_c2g_req = false;
+	}
 #ifdef PROFILE_CUDA
 	c2gTimer.Stop();
 	compTimer.Start();
