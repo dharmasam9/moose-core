@@ -573,7 +573,7 @@ void HSolveActive::advanceCalcium()
 #endif
 	// Sending calcium data to host
 	cudaSafeCall(cudaMemcpy(&(ca_[0]), d_ca, ca_.size()*sizeof(double), cudaMemcpyDeviceToHost));
-	cudaSafeCall(cudaMemcpy(&(caConc_[0]), d_caConc_, caConc_.size()*sizeof(CaConcStruct), cudaMemcpyDeviceToHost));
+	//cudaSafeCall(cudaMemcpy(&(caConc_[0]), d_caConc_, caConc_.size()*sizeof(CaConcStruct), cudaMemcpyDeviceToHost));
 #ifdef PROFILE_CUDA
 	g2cTimer.Stop();
 	// Calculate elapsed times
@@ -679,9 +679,9 @@ void HSolveActive::advanceChannels( double dt )
 	c2gTimer.Start();
 #endif
 	// Transferring memory to device
-	//cudaSafeCall(cudaMemcpy(d_V, &(V_.front()), nCompt_ * sizeof(double), cudaMemcpyHostToDevice));
-	//cudaSafeCall(cudaMemcpy(d_state_, &(state_[0]), state_.size()*sizeof(double), cudaMemcpyHostToDevice));
-	//cudaSafeCall(cudaMemcpy(d_ca, &(ca_.front()), ca_.size()*sizeof(double), cudaMemcpyHostToDevice));
+	cudaSafeCall(cudaMemcpy(d_V, &(V_.front()), nCompt_ * sizeof(double), cudaMemcpyHostToDevice));
+	cudaSafeCall(cudaMemcpy(d_state_, &(state_[0]), state_.size()*sizeof(double), cudaMemcpyHostToDevice));
+	cudaSafeCall(cudaMemcpy(d_ca, &(ca_.front()), ca_.size()*sizeof(double), cudaMemcpyHostToDevice));
 	if(externCal_c2g_req){
 		cudaSafeCall(cudaMemcpy(d_externalCalcium, &(externalCalcium_.front()), externalCalcium_.size()*sizeof(double), cudaMemcpyHostToDevice));
 		externCal_c2g_req = false;
@@ -698,7 +698,7 @@ void HSolveActive::advanceChannels( double dt )
 	g2cTimer.Start();
 #endif
 	// Transferring memory to host
-	//cudaSafeCall(cudaMemcpy(&state_[0], d_state_, state_.size()*sizeof(double), cudaMemcpyDeviceToHost));
+	cudaSafeCall(cudaMemcpy(&state_[0], d_state_, state_.size()*sizeof(double), cudaMemcpyDeviceToHost));
 #ifdef PROFILE_CUDA
 	g2cTimer.Stop();
 	// Calculate elapsed times
