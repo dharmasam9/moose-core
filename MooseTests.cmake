@@ -64,12 +64,14 @@ set_tests_properties(pymoose-neuroml-reader-test
     PROPERTIES ENVIRONMENT "PYTHONPATH=${PROJECT_BINARY_DIR}/python"
     )
 
+if(HDF5_FOUND)
 ADD_TEST(NAME pymoose-nsdf-sanity-test
     COMMAND ${TEST_COMMAND} ${PROJECT_SOURCE_DIR}/tests/python/test_nsdf.py
     )
 set_tests_properties(pymoose-nsdf-sanity-test 
     PROPERTIES ENVIRONMENT "PYTHONPATH=${PROJECT_BINARY_DIR}/python"
     )
+endif(HDF5_FOUND)
 
 # Test Ksolve
 ADD_TEST(NAME pymoose-ksolve-test
@@ -133,3 +135,22 @@ ADD_TEST( NAME pymoose-test-calcium-hsolve
 set_tests_properties(pymoose-test-calcium-hsolve
     PROPERTIES ENVIRONMENT "PYTHONPATH=${PROJECT_BINARY_DIR}/python"
     )
+
+# Test accessing existing path without moose.element.
+ADD_TEST( NAME pymoose-test-path
+    COMMAND ${TEST_COMMAND} 
+    ${PROJECT_SOURCE_DIR}/tests/python/test_paths.py
+    )
+set_tests_properties(pymoose-test-path
+    PROPERTIES ENVIRONMENT "PYTHONPATH=${PROJECT_BINARY_DIR}/python"
+    )
+
+# # NOTE: These tests are not enabled yet. They take lot of time. Not all scripts
+# # are fixed yet.
+# # Test moose-examples with very short timeout. 
+# ADD_TEST( NAME pymoose-test-moose-examples
+#     COMMAND ${TEST_COMMAND} -c "import moose; moose.test( timeout = 10 );"
+#     )
+# set_tests_properties(pymoose-test-moose-examples
+#    PROPERTIES ENVIRONMENT "PYTHONPATH=${PROJECT_BINARY_DIR}/python"
+#    )
