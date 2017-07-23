@@ -220,6 +220,7 @@ void HSolveActive::advanceCalcium()
 void HSolveActive::advanceChannels( double dt )
 {
 	// Voltage related updates.
+	#pragma omp parallel for
 	for (unsigned int tid = 0; tid < h_vgate_indices.size(); ++tid) {
 		int index, lookup_index, column;
 
@@ -243,6 +244,7 @@ void HSolveActive::advanceChannels( double dt )
 		}
 	}
 
+	#pragma omp parallel for
 	for (unsigned int tid = 0; tid < h_cagate_indices.size(); ++tid) {
 		int index, lookup_index, column;
 
