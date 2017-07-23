@@ -134,6 +134,25 @@ protected:
 		*   those compartments. */
      vector< unsigned int >    outIk_;
 
+#if 1
+    double* h_chan_Gbar;
+	int* h_chan_instant;
+	double* h_chan_modulation;
+	int* h_chan_to_comp;
+
+	double* h_state_powers;
+	int* h_state2chanId;
+	int* h_state2column;
+
+ 	vector<int> h_cagate_indices;
+ 	vector<int> h_cagate_capoolIds;
+
+ 	vector<int> h_vgate_indices;
+ 	vector<int> h_vgate_compIds;
+
+ 	vector<int> h_exCalgate_indices;
+#endif
+
 private:
     /**
      * Setting up of data structures: Defined in HSolveActiveSetup.cpp
@@ -172,6 +191,11 @@ private:
     static const int INSTANT_X;
     static const int INSTANT_Y;
     static const int INSTANT_Z;
+
+#if 1
+    void preProcess();
+#endif
+
 };
 
 #endif // _HSOLVE_ACTIVE_H

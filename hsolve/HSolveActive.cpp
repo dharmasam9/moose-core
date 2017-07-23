@@ -24,6 +24,8 @@ using namespace moose;
 //~ #include "ZombieCompartment.h"
 //~ #include "ZombieCaConc.h"
 
+#include <omp.h>
+
 extern ostream& operator <<( ostream& s, const HinesMatrix& m );
 
 const int HSolveActive::INSTANT_X = 1;
@@ -217,6 +219,55 @@ void HSolveActive::advanceCalcium()
 
 void HSolveActive::advanceChannels( double dt )
 {
+	// Voltage related updates.
+	for (unsigned int tid = 0; tid < h_vgate_indices.size(); ++tid) {
+		int index, lookup_index, column;
+
+		index = h_vgate_indices[tid];
+		lookup_index = h_vgate_compIds[tid];
+		column = h_state2column[index];
+
+		LookupRow vRow;
+		LookupColumn vCol;
+		vTable_.row(V_[lookup_index], vRow);
+		vCol.column = column;
+		double C1,C2;
+
+		vTable_.lookup( vCol, vRow, C1, C2 );
+
+		if(!h_chan_instant[h_state2chanId[index]]){
+			double temp  = 1.0 + dt/2.0 * C2; // reusing a
+			state_[index] = ( state_[index] * ( 2.0 - temp ) + dt * C1 ) / temp;
+		}else{
+			state_[index] = C1/C2;
+		}
+	}
+
+	for (unsigned int tid = 0; tid < h_cagate_indices.size(); ++tid) {
+		int index, lookup_index, column;
+
+		index = h_cagate_indices[tid];
+		lookup_index = h_cagate_capoolIds[tid];
+		column = h_state2column[index];
+
+		LookupRow caRow;
+		LookupColumn caCol;
+		caTable_.row(ca_[lookup_index], caRow);
+		caCol.column = column;
+		double C1,C2;
+
+		caTable_.lookup( caCol, caRow, C1, C2 );
+
+		if(!h_chan_instant[h_state2chanId[index]]){
+			double temp  = 1.0 + dt/2.0 * C2; // reusing a
+			state_[index] = ( state_[index] * ( 2.0 - temp ) + dt * C1 ) / temp;
+		}else{
+			state_[index] = C1/C2;
+		}
+	}
+
+
+#if 0
     vector< double >::iterator iv;
     vector< double >::iterator istate = state_.begin();
     vector< int >::iterator ichannelcount = channelCount_.begin();
@@ -330,6 +381,7 @@ void HSolveActive::advanceChannels( double dt )
 
         ++ichannelcount, ++icacount;
     }
+#endif
 }
 
 /**
@@ -382,3 +434,110 @@ void HSolveActive::sendValues( ProcPtr info )
             ca_[ *i ]
         );
 }
+
+void HSolveActive::preProcess(){
+	int num_compts = V_.size();
+	int num_channels = channel_.size();
+	int num_cmprsd_gates = state_.size();
+	int num_Ca_pools = ca_.size();
+
+	// Channel variables
+	h_chan_Gbar = new double[num_channels];
+	h_chan_instant = new int[num_channels];
+	h_chan_modulation= new double[num_channels];
+	h_chan_to_comp = new int[num_channels];
+
+	// Gathering data for each channel
+	for(unsigned int i=0;i<channel_.size();i++){
+		h_chan_Gbar[i] = channel_[i].Gbar_;
+
+		h_chan_instant[i] = channel_[i].instant_;
+		h_chan_modulation[i] = channel_[i].modulation_;
+
+		// Channel to Compartment Info
+		h_chan_to_comp[i] = chan2compt_[i];
+	}
+
+	// Constructing ca and channel row ptrs with nCompt as rows.
+	int ca_rowPtr[V_.size()+1];
+	int chan_rowPtr[V_.size()+1];
+	int sum1 = 0, sum2 = 0;
+	for(unsigned int i=0;i<=V_.size();i++){
+		ca_rowPtr[i] = sum1;
+		chan_rowPtr[i] = sum2;
+
+		if(i < V_.size()){
+			// Last one should be just set.
+			sum1 += caCount_[i];
+			sum2 += channelCount_[i];
+		}
+	}
+
+	// Optimized version
+	h_state_powers = new double[num_cmprsd_gates];
+	h_state2chanId = new int[num_cmprsd_gates];
+	h_state2column = new int[num_cmprsd_gates];
+	int* h_state_rowPtr = new int[num_channels+1]();
+
+	// Gathering gate information and separating gates (with power < 0) , (with vm dependent) , (with ca dependent)
+	int cmprsd_gate_index = 0; // If the logic is true cmprsd_gate_index value at the end of for loop = # of gates with powers > 0
+	double h_gate_powers[3]; // Reusable array for holding powers of a channel
+	for(unsigned int i=0;i<V_.size();i++){
+		for(int j=chan_rowPtr[i]; j<chan_rowPtr[i+1]; j++){
+
+			// Setting powers
+			h_gate_powers[0] = channel_[j].Xpower_;
+			h_gate_powers[1] = channel_[j].Ypower_;
+			h_gate_powers[2] = channel_[j].Zpower_;
+
+			for(int k=0;k<3;k++){
+				if(h_gate_powers[k] > 0){
+
+					// Collecting power of valid gate
+					switch(k){
+						case 0:
+							h_state_powers[cmprsd_gate_index] = channel_[j].Xpower_;
+							break;
+						case 1:
+							h_state_powers[cmprsd_gate_index] = channel_[j].Ypower_;
+							break;
+						case 2:
+							h_state_powers[cmprsd_gate_index] = channel_[j].Zpower_;
+							break;
+					}
+
+					// Collecting channel and column of valid gate
+					h_state2chanId[cmprsd_gate_index] = j;
+					h_state2column[cmprsd_gate_index] = column_[cmprsd_gate_index].column;
+
+					// Partitioning of vm and ca dependent gates.
+					if(k == 2 && caDependIndex_[j] != -1){
+						h_cagate_indices.push_back(cmprsd_gate_index);
+						h_cagate_capoolIds.push_back(ca_rowPtr[i] + caDependIndex_[j]);
+					}else{
+						h_vgate_compIds.push_back((int)chan2compt_[j]);
+						h_vgate_indices.push_back(cmprsd_gate_index);
+
+						// k=2 gate might depend on externalCalcium
+						if(k == 2)
+							h_exCalgate_indices.push_back(cmprsd_gate_index);
+					}
+					h_state_rowPtr[j] += 1;
+					cmprsd_gate_index++; // cmprsd_gate_index is incremented only if power > 0 is found.
+				}
+			}
+		}
+	}
+	assert(cmprsd_gate_index == num_cmprsd_gates);
+
+	// Converting rowCounts to rowptr
+	int csum = 0, ctemp;
+	int zero_count = 0;
+	for (int i = 0; i < num_channels+1; ++i) {
+		ctemp = h_state_rowPtr[i];
+		if(i < num_channels && h_state_rowPtr[i] == 0) zero_count++;
+		h_state_rowPtr[i] = csum;
+		csum += ctemp;
+	}
+}
+

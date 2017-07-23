@@ -38,6 +38,9 @@ void HSolveActive::setup( Id seed, double dt )
     //~ cout << "# of Ca pools: " << caConc_.size() << "." << endl;
     //~ cout << "# of SynChans: " << synchan_.size() << "." << endl;
     //~ cout << "# of SpikeGens: " << spikegen_.size() << "." << endl;
+#if 1
+    preProcess(); // Preprocess data for faster simulation.
+#endif
 }
 
 void HSolveActive::reinit( ProcPtr info )
