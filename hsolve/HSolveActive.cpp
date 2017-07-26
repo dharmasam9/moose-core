@@ -219,54 +219,85 @@ void HSolveActive::advanceCalcium()
 
 void HSolveActive::advanceChannels( double dt )
 {
-	// Voltage related updates.
-	#pragma omp parallel for
-	for (unsigned int tid = 0; tid < h_vgate_indices.size(); ++tid) {
-		int index, lookup_index, column;
+    // Required variables
+    vector<double> table = vTable_.get_table();
+    double min = vTable_.get_min();
+    double max = vTable_.get_max();
+    double dx = vTable_.get_dx();
+    unsigned int nColumns = vTable_.get_num_of_columns();
 
-		index = h_vgate_indices[tid];
-		lookup_index = h_vgate_compIds[tid];
-		column = h_state2column[index];
+    // Looking up values for Voltages
+    for(unsigned int tid = 0; tid < V_.size(); ++tid)
+    {
+        double x = V_[tid];
 
-		LookupRow vRow;
-		LookupColumn vCol;
-		vTable_.row(V_[lookup_index], vRow);
-		vCol.column = column;
-		double C1,C2;
+        if ( x < min )
+            x = min;
+        else if ( x > max )
+            x = max;
 
-		vTable_.lookup( vCol, vRow, C1, C2 );
+        double div = ( x - min ) / dx;
+        unsigned int integer = ( unsigned int )( div );
 
-		if(!h_chan_instant[h_state2chanId[index]]){
-			double temp  = 1.0 + dt/2.0 * C2; // reusing a
-			state_[index] = ( state_[index] * ( 2.0 - temp ) + dt * C1 ) / temp;
-		}else{
-			state_[index] = C1/C2;
-		}
-	}
+        h_V_rows[tid] = integer*nColumns;
+        h_V_fracs[tid] = div-integer;
+    }
 
-	#pragma omp parallel for
-	for (unsigned int tid = 0; tid < h_cagate_indices.size(); ++tid) {
-		int index, lookup_index, column;
+    // Updating state variable of Voltage dependent gates
+    for(unsigned int tid = 0; tid < h_vgate_indices.size(); ++tid) {
+        double a,b,C1,C2;
+        int index, lookup_index, row_start_index, column;
 
-		index = h_cagate_indices[tid];
-		lookup_index = h_cagate_capoolIds[tid];
-		column = h_state2column[index];
+        index = h_vgate_indices[tid];
+        lookup_index = h_vgate_compIds[tid];
+        row_start_index = h_V_rows[lookup_index];
+        column = h_state2column[index];
 
-		LookupRow caRow;
-		LookupColumn caCol;
-		caTable_.row(ca_[lookup_index], caRow);
-		caCol.column = column;
-		double C1,C2;
+        a = table[row_start_index + column];
+        b = table[row_start_index + column + nColumns];
 
-		caTable_.lookup( caCol, caRow, C1, C2 );
+        C1 = a + (b-a)*h_V_fracs[lookup_index];
 
-		if(!h_chan_instant[h_state2chanId[index]]){
-			double temp  = 1.0 + dt/2.0 * C2; // reusing a
-			state_[index] = ( state_[index] * ( 2.0 - temp ) + dt * C1 ) / temp;
-		}else{
-			state_[index] = C1/C2;
-		}
-	}
+        a = table[row_start_index + column + 1];
+        b = table[row_start_index + column + 1 + nColumns];
+
+        C2 = a + (b-a)*h_V_fracs[lookup_index];
+
+        if(!h_chan_instant[h_state2chanId[index]]){
+            a = 1.0 + dt/2.0 * C2; // reusing a
+            state_[index] = ( state_[index] * ( 2.0 - a ) + dt * C1 ) / a;
+        }
+        else{
+            state_[index] = C1/C2;
+        }
+    }
+
+	if(h_cagate_indices.size() > 0){
+        cout << "Number of Calcium dep gates " << h_cagate_indices.size() << endl;
+        for (unsigned int tid = 0; tid < h_cagate_indices.size(); ++tid) {
+                int index, lookup_index, column;
+
+                index = h_cagate_indices[tid];
+                lookup_index = h_cagate_capoolIds[tid];
+                column = h_state2column[index];
+
+                LookupRow caRow;
+                LookupColumn caCol;
+                caTable_.row(ca_[lookup_index], caRow);
+                caCol.column = column;
+                double C1,C2;
+
+                caTable_.lookup( caCol, caRow, C1, C2 );
+
+                if(!h_chan_instant[h_state2chanId[index]]){
+                    double temp  = 1.0 + dt/2.0 * C2; // reusing a
+                    state_[index] = ( state_[index] * ( 2.0 - temp ) + dt * C1 ) / temp;
+                }else{
+                    state_[index] = C1/C2;
+                }
+            }
+    }
+	
 
 
 #if 0
@@ -541,5 +572,9 @@ void HSolveActive::preProcess(){
 		h_state_rowPtr[i] = csum;
 		csum += ctemp;
 	}
+
+    // Advance Channels
+    h_V_rows = new int[num_compts];
+    h_V_fracs = new double[num_compts];
 }
 

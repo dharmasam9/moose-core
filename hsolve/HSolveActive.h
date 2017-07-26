@@ -144,6 +144,11 @@ protected:
 	int* h_state2chanId;
 	int* h_state2column;
 
+
+    // Advance Channels related
+    int* h_V_rows;
+    double* h_V_fracs;
+
  	vector<int> h_cagate_indices;
  	vector<int> h_cagate_capoolIds;
 

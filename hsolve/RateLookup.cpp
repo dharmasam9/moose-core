@@ -6,8 +6,8 @@
 ** GNU Lesser General Public License version 2.1
 ** See the file COPYING.LIB for the full notice.
 **********************************************************************/
-
 #include <vector>
+#include <stdio.h>
 using namespace std;
 
 #include "RateLookup.h"
@@ -23,9 +23,10 @@ LookupTable::LookupTable(
 	dx_ = ( max - min ) / nDivs;
 	// Every row has 2 entries for each type of gate
 	nColumns_ = 2 * nSpecies;
-
+	
 	//~ interpolate_.resize( nSpecies );
 	table_.resize( nPts_ * nColumns_ );
+
 }
 
 void LookupTable::addColumns(
@@ -42,14 +43,14 @@ void LookupTable::addColumns(
 	for ( unsigned int igrid = 0; igrid < nPts_ - 1 ; ++igrid ) {
 		*( iTable )     = *ic1;
 		*( iTable + 1 ) = *ic2;
-
+		
 		iTable += nColumns_;
 		++ic1, ++ic2;
 	}
 	// Then duplicate the last point
 	*( iTable )     = C1.back();
 	*( iTable + 1 ) = C2.back();
-
+	
 	//~ interpolate_[ species ] = interpolate;
 }
 
@@ -61,17 +62,49 @@ void LookupTable::column( unsigned int species, LookupColumn& column )
 
 void LookupTable::row( double x, LookupRow& row )
 {
+
 	if ( x < min_ )
 		x = min_;
 	else if ( x > max_ )
 		x = max_;
-
+	
 	double div = ( x - min_ ) / dx_;
 	unsigned int integer = ( unsigned int )( div );
-
+	
 	row.fraction = div - integer;
 	row.row = &( table_.front() ) + integer * nColumns_;
+	row.rowIndex = integer * nColumns_;
+
 }
+
+#if 1
+     
+unsigned int LookupTable::get_num_of_columns()
+{
+    return LookupTable::nColumns_;
+}
+
+vector<double> LookupTable::get_table()
+{
+    return LookupTable::table_;
+}
+
+double LookupTable::get_min()
+{
+	return min_;
+}
+
+double LookupTable::get_max()
+{
+	return max_;
+}
+
+double LookupTable::get_dx()
+{
+	return dx_;
+}
+
+#endif
 
 void LookupTable::lookup(
 	const LookupColumn& column,
@@ -81,22 +114,22 @@ void LookupTable::lookup(
 {
 	double a, b;
 	double *ap, *bp;
-
+	
 	ap = row.row + column.column;
-
+	
 	//~ if ( ! column.interpolate ) {
 		//~ C1 = *ap;
 		//~ C2 = *( ap + 1 );
-		//~
+		//~ 
 		//~ return;
 	//~ }
-
+	
 	bp = ap + nColumns_;
-
+	
 	a = *ap;
 	b = *bp;
 	C1 = a + ( b - a ) * row.fraction;
-
+	
 	a = *( ap + 1 );
 	b = *( bp + 1 );
 	C2 = a + ( b - a ) * row.fraction;
