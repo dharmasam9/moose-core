@@ -1,3 +1,5 @@
+#include "HSolveActive.h"
+
 __global__
 void get_lookup_rows_and_fractions_cuda(
 		double* lookups,
@@ -22,6 +24,22 @@ void get_lookup_rows_and_fractions_cuda(
 		rows[tid] = integer*nColumns;
 		fracs[tid] = div-integer;
 	}
+}
+
+void HSolveActive::get_lookup_rows_and_fractions_cuda_wrapper(int gpu_load_count){
+	int num_comps = V_.size();
+
+	int THREADS_PER_BLOCK = 512;
+	int BLOCKS = gpu_load_count/THREADS_PER_BLOCK;
+	BLOCKS = (gpu_load_count + THREADS_PER_BLOCK-1)/THREADS_PER_BLOCK;
+
+
+	// Getting lookup metadata for Vm
+	get_lookup_rows_and_fractions_cuda<<<BLOCKS,THREADS_PER_BLOCK>>>(u_V,
+    		d_V_table,
+    		vTable_.get_min(), vTable_.get_max(), vTable_.get_dx(),
+    		u_V_rows, u_V_fracs,
+    		vTable_.get_num_of_columns(), gpu_load_count);
 }
 
 /*
@@ -135,3 +153,4 @@ void advance_channels_for_externalCalcium(
 		}
 	}
 }
+

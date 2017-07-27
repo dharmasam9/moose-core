@@ -135,6 +135,8 @@ protected:
      vector< unsigned int >    outIk_;
 
 #if 1
+    int step_num;
+
     double* h_chan_Gbar;
 	int* h_chan_instant;
 	double* h_chan_modulation;
@@ -146,8 +148,13 @@ protected:
 
 
     // Advance Channels related
-    int* h_V_rows;
-    double* h_V_fracs;
+	// Device memory for preprocessed info
+	double* d_V_table;
+	double* d_Ca_table;
+
+	double* u_V;
+    int* u_V_rows;
+    double* u_V_fracs;
 
  	vector<int> h_cagate_indices;
  	vector<int> h_cagate_capoolIds;
@@ -199,6 +206,8 @@ private:
 
 #if 1
     void preProcess();
+    void get_lookup_rows_and_fractions_cuda_wrapper(int gpu_load_count);
+    void advance_channels_opt_cuda();
 #endif
 
 };

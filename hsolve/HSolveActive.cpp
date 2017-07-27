@@ -25,6 +25,7 @@ using namespace moose;
 //~ #include "ZombieCaConc.h"
 
 #include <omp.h>
+#include <cuda_runtime_api.h>
 
 extern ostream& operator <<( ostream& s, const HinesMatrix& m );
 
@@ -36,6 +37,9 @@ HSolveActive::HSolveActive()
 {
     caAdvance_ = 1;
 
+#if 1
+    step_num = 0;
+#endif
     // Default lookup table size
     //~ vDiv_ = 3000;    // for voltage
     //~ caDiv_ = 3000;   // for calcium
@@ -53,6 +57,10 @@ void HSolveActive::step( ProcPtr info )
     {
         current_.resize( channel_.size() );
     }
+
+#if 1
+    step_num++;
+#endif
 
     advanceChannels( info->dt );
     calculateChannelCurrents();
@@ -226,8 +234,19 @@ void HSolveActive::advanceChannels( double dt )
     double dx = vTable_.get_dx();
     unsigned int nColumns = vTable_.get_num_of_columns();
 
+    // TEMP CODE transfer from vector data structure to unified data structure.
+    memcpy(u_V, &V_[0], V_.size()*sizeof(double));
+
+    // Splitting the work between CPU and GPU
+    int cpu_start_tid = 0.5*V_.size();
+    int gpu_load_count = cpu_start_tid;
+
     // Looking up values for Voltages
-    for(unsigned int tid = 0; tid < V_.size(); ++tid)
+    // GPU load Note:Kernel call inside wrapper function is asynchronous.
+    // So this is not a blocking call.
+    get_lookup_rows_and_fractions_cuda_wrapper(gpu_load_count);
+    // CPU load
+    for(unsigned int tid = cpu_start_tid; tid < V_.size(); ++tid)
     {
         double x = V_[tid];
 
@@ -239,9 +258,11 @@ void HSolveActive::advanceChannels( double dt )
         double div = ( x - min ) / dx;
         unsigned int integer = ( unsigned int )( div );
 
-        h_V_rows[tid] = integer*nColumns;
-        h_V_fracs[tid] = div-integer;
+        u_V_rows[tid] = integer*nColumns;
+        u_V_fracs[tid] = div-integer;
     }
+
+    cudaDeviceSynchronize();
 
     // Updating state variable of Voltage dependent gates
     for(unsigned int tid = 0; tid < h_vgate_indices.size(); ++tid) {
@@ -250,18 +271,18 @@ void HSolveActive::advanceChannels( double dt )
 
         index = h_vgate_indices[tid];
         lookup_index = h_vgate_compIds[tid];
-        row_start_index = h_V_rows[lookup_index];
+        row_start_index = u_V_rows[lookup_index];
         column = h_state2column[index];
 
         a = table[row_start_index + column];
         b = table[row_start_index + column + nColumns];
 
-        C1 = a + (b-a)*h_V_fracs[lookup_index];
+        C1 = a + (b-a)*u_V_fracs[lookup_index];
 
         a = table[row_start_index + column + 1];
         b = table[row_start_index + column + 1 + nColumns];
 
-        C2 = a + (b-a)*h_V_fracs[lookup_index];
+        C2 = a + (b-a)*u_V_fracs[lookup_index];
 
         if(!h_chan_instant[h_state2chanId[index]]){
             a = 1.0 + dt/2.0 * C2; // reusing a
@@ -271,6 +292,7 @@ void HSolveActive::advanceChannels( double dt )
             state_[index] = C1/C2;
         }
     }
+
 
 	if(h_cagate_indices.size() > 0){
         cout << "Number of Calcium dep gates " << h_cagate_indices.size() << endl;
@@ -574,7 +596,19 @@ void HSolveActive::preProcess(){
 	}
 
     // Advance Channels
-    h_V_rows = new int[num_compts];
-    h_V_fracs = new double[num_compts];
+    //u_V_rows = new int[num_compts];
+    //u_V_fracs = new double[num_compts];
+
+	// LookUp Tables
+	int V_table_size = vTable_.get_table().size();
+	int Ca_table_size = caTable_.get_table().size();
+
+	cudaMalloc((void **)&(d_V_table), V_table_size * sizeof(double));
+	cudaMalloc((void **)&(d_Ca_table), Ca_table_size * sizeof(double));
+
+	cudaMallocManaged((void**)&u_V, num_compts*sizeof(double), 1);
+    cudaMallocManaged((void**)&u_V_rows, num_compts*sizeof(int), 1);
+    cudaMallocManaged((void**)&u_V_fracs, num_compts*sizeof(double), 1);
+
 }
 
